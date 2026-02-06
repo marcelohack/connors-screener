@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "connors-screener"
+version = "0.1.0"
+description = "Stock screening system for Connors Trading"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.13"
+dependencies = [
+    # Core components (registry, parameter_override)
+    "connors-core>=0.1.0",
+    # HTTP requests (for screening providers)
+    "requests>=2.31.0",
+    # Data handling
+    "pandas>=2.0.0",
+    # YAML support (for config loader)
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/marcelohack/connors-screener"
+Repository = "https://github.com/marcelohack/connors-screener"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["connors_screener*"]
+exclude = ["tests*", "docs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
