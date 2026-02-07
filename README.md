@@ -21,13 +21,23 @@ Stock and cryptocurrency screening system with support for multiple providers (T
 pip install connors-screener
 ```
 
-For development:
+### Local Development
+
+**Prerequisites**: Python 3.13, [pyenv](https://github.com/pyenv/pyenv) + [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv)
 
 ```bash
-git clone https://github.com/marcelohack/connors-screener.git
-cd connors-screener
+# 1. Create and activate a virtual environment
+pyenv virtualenv 3.13 connors-screener
+pyenv activate connors-screener
+
+# 2. Install connors packages from local checkouts (not on PyPI)
+pip install -e ../core
+
+# 3. Install with dev dependencies
 pip install -e ".[dev]"
 ```
+
+A `.python-version` file is included so pyenv auto-activates when you `cd` into this directory.
 
 ## Quick Start
 
