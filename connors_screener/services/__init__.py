@@ -1,3 +1,3 @@
-from connors_screener.services.screener_service import ScreenerService
+from connors_screener.services.screener_service import PostFilter, ScreenerService
 
-__all__ = ["ScreenerService"]
+__all__ = ["PostFilter", "ScreenerService"]

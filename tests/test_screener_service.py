@@ -12,7 +12,7 @@ import pytest
 
 from connors_screener.config.screening import MarketScreeningConfig
 from connors_screener.core.screener import ScreeningConfig, ScreeningResult, StockData
-from connors_screener.services.screener_service import ScreenerService
+from connors_screener.services.screener_service import PostFilter, ScreenerService
 
 
 class TestScreenerService:
@@ -463,3 +463,211 @@ class TestScreenerServiceIntegration:
         assert result is not None
         assert result["name"] == "integration_test"
         mock_register_configs.assert_called_once()
+
+
+class TestPostFilter:
+    """Tests for the post_filter feature in run_screening"""
+
+    @pytest.fixture
+    def service(self):
+        return ScreenerService()
+
+    @pytest.fixture
+    def screening_config(self):
+        return ScreeningConfig(
+            name="test_config",
+            description="Test",
+            provider="tv",
+            parameters={"rsi_level": 30, "min_price": 100},
+            filters=[],
+            provider_config={},
+        )
+
+    @pytest.fixture
+    def screening_result(self):
+        stock_data = [
+            StockData(symbol="AAPL", name="Apple", price=150.0, raw_data={"RSI2": 10}),
+            StockData(symbol="GOOGL", name="Alphabet", price=140.0, raw_data={"RSI2": 25}),
+            StockData(symbol="MSFT", name="Microsoft", price=300.0, raw_data={"RSI2": 50}),
+        ]
+        return ScreeningResult(
+            symbols=["AAPL", "GOOGL", "MSFT"],
+            data=stock_data,
+            provider="tv",
+            config_name="test_config",
+            timestamp="2024-01-01T00:00:00Z",
+            metadata={"market": "america"},
+        )
+
+    def _patch_service(self, service, screening_config, screening_result):
+        """Return a context manager that patches registry + apply_parameter_overrides."""
+        mock_provider = Mock()
+        mock_provider.scan.return_value = screening_result
+        return (
+            patch.object(
+                service.registry, "create_screener_provider", return_value=mock_provider
+            ),
+            patch.object(
+                service.registry, "get_screening_config", return_value=screening_config
+            ),
+            patch(
+                "connors_screener.services.screener_service.apply_parameter_overrides",
+                return_value=screening_config,
+            ),
+        )
+
+    def test_run_screening_no_post_filter(
+        self, service, screening_config, screening_result
+    ):
+        """No filter passed -> result unchanged, no post-filter metadata"""
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening("tv", "test_config")
+
+        assert result.symbols == ["AAPL", "GOOGL", "MSFT"]
+        assert len(result.data) == 3
+        assert "post_filter_applied" not in result.metadata
+
+    def test_run_screening_with_post_filter_filters_data(
+        self, service, screening_config, screening_result
+    ):
+        """Filter by price -> correct subset, metadata counts correct"""
+
+        def price_above_145(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            return stock.price > 145
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter=price_above_145
+            )
+
+        assert result.symbols == ["AAPL", "MSFT"]
+        assert len(result.data) == 2
+        assert result.metadata["post_filter_applied"] is True
+        assert result.metadata["pre_filter_count"] == 3
+        assert result.metadata["post_filter_count"] == 2
+
+    def test_run_screening_post_filter_receives_screening_parameters(
+        self, service, screening_config, screening_result
+    ):
+        """Filter context contains ScreeningConfig.parameters"""
+        received_contexts: list = []
+
+        def capture_context(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            received_contexts.append(dict(ctx))
+            return True
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            service.run_screening("tv", "test_config", post_filter=capture_context)
+
+        assert len(received_contexts) == 3
+        for ctx in received_contexts:
+            assert ctx["rsi_level"] == 30
+            assert ctx["min_price"] == 100
+
+    def test_run_screening_post_filter_receives_custom_context(
+        self, service, screening_config, screening_result
+    ):
+        """post_filter_context values are available in context dict"""
+        received_contexts: list = []
+
+        def capture_context(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            received_contexts.append(dict(ctx))
+            return True
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            service.run_screening(
+                "tv",
+                "test_config",
+                post_filter=capture_context,
+                post_filter_context={"watchlist": ["AAPL", "MSFT"]},
+            )
+
+        for ctx in received_contexts:
+            assert ctx["watchlist"] == ["AAPL", "MSFT"]
+            # screening params still present
+            assert ctx["rsi_level"] == 30
+
+    def test_run_screening_post_filter_context_overrides_parameters(
+        self, service, screening_config, screening_result
+    ):
+        """post_filter_context keys override parameters keys"""
+        received_contexts: list = []
+
+        def capture_context(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            received_contexts.append(dict(ctx))
+            return True
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            service.run_screening(
+                "tv",
+                "test_config",
+                post_filter=capture_context,
+                post_filter_context={"rsi_level": 99},
+            )
+
+        for ctx in received_contexts:
+            assert ctx["rsi_level"] == 99  # overridden
+
+    def test_run_screening_post_filter_removes_all(
+        self, service, screening_config, screening_result
+    ):
+        """Filter returns all False -> empty result, count=0"""
+
+        def reject_all(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            return False
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter=reject_all
+            )
+
+        assert result.symbols == []
+        assert result.data == []
+        assert result.metadata["post_filter_count"] == 0
+        assert result.metadata["pre_filter_count"] == 3
+
+    def test_run_screening_post_filter_removes_none(
+        self, service, screening_config, screening_result
+    ):
+        """Filter returns all True -> all records kept"""
+
+        def keep_all(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            return True
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter=keep_all
+            )
+
+        assert result.symbols == ["AAPL", "GOOGL", "MSFT"]
+        assert len(result.data) == 3
+        assert result.metadata["post_filter_applied"] is True
+        assert result.metadata["pre_filter_count"] == 3
+        assert result.metadata["post_filter_count"] == 3
+
+    def test_run_screening_post_filter_uses_raw_data(
+        self, service, screening_config, screening_result
+    ):
+        """Filter accesses stock.get_field('RSI2') from raw_data"""
+
+        def rsi2_below_30(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            rsi = stock.get_field("RSI2")
+            return rsi is not None and rsi < 30
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter=rsi2_below_30
+            )
+
+        assert result.symbols == ["AAPL", "GOOGL"]
+        assert len(result.data) == 2
+        assert result.data[0].get_field("RSI2") == 10
+        assert result.data[1].get_field("RSI2") == 25
