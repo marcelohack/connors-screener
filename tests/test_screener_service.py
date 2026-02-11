@@ -671,3 +671,76 @@ class TestPostFilter:
         assert len(result.data) == 2
         assert result.data[0].get_field("RSI2") == 10
         assert result.data[1].get_field("RSI2") == 25
+
+    def test_run_screening_with_string_post_filter(
+        self, service, screening_config, screening_result
+    ):
+        """Test passing post_filter as a string name resolves from registry"""
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter="elephant_bars"
+            )
+
+        # elephant_bars skeleton passes everything through
+        assert result.symbols == ["AAPL", "GOOGL", "MSFT"]
+        assert len(result.data) == 3
+        assert result.metadata["post_filter_applied"] is True
+
+    def test_run_screening_with_unknown_string_post_filter_raises(
+        self, service, screening_config, screening_result
+    ):
+        """Test that unknown string post_filter raises ValueError"""
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            with pytest.raises(ValueError, match="Post-filter 'nonexistent' not found"):
+                service.run_screening(
+                    "tv", "test_config", post_filter="nonexistent"
+                )
+
+    def test_run_screening_callable_post_filter_still_works(
+        self, service, screening_config, screening_result
+    ):
+        """Test that passing a callable post_filter still works (backward compat)"""
+
+        def price_filter(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            return stock.price > 145
+
+        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        with p1, p2, p3:
+            result = service.run_screening(
+                "tv", "test_config", post_filter=price_filter
+            )
+
+        assert result.symbols == ["AAPL", "MSFT"]
+        assert len(result.data) == 2
+
+    def test_run_screening_string_post_filter_receives_context(
+        self, service, screening_config, screening_result
+    ):
+        """Test that string-based post_filter receives post_filter_context"""
+        received_contexts: list = []
+
+        def capture_filter(stock: StockData, ctx: Dict[str, Any]) -> bool:
+            received_contexts.append(dict(ctx))
+            return True
+
+        from connors_screener.screening.post_filters import _post_filters
+        _post_filters["test_capture"] = capture_filter
+
+        try:
+            p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+            with p1, p2, p3:
+                service.run_screening(
+                    "tv",
+                    "test_config",
+                    post_filter="test_capture",
+                    post_filter_context={"volume_multiplier": 3.0},
+                )
+
+            assert len(received_contexts) == 3
+            for ctx in received_contexts:
+                assert ctx["volume_multiplier"] == 3.0
+                assert ctx["rsi_level"] == 30  # from screening_config.parameters
+        finally:
+            _post_filters.pop("test_capture", None)
