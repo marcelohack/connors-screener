@@ -5,15 +5,18 @@ Provides high-level interface for stock screening operations,
 integrating with the screening providers and configurations.
 """
 
+import importlib.util
 import json
+import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Any, Callable, Dict, List, Optional, Union, cast
 
 import connors_screener.screening.configs.finviz_rsi2
 import connors_screener.screening.configs.tradingview_crypto_basic
 import connors_screener.screening.configs.tradingview_momentum
 import connors_screener.screening.configs.tradingview_rsi2
+import connors_screener.screening.configs.tradingview_elephant_bars
 import connors_screener.screening.configs.tradingview_value
 import connors_screener.screening.providers.finviz
 
@@ -29,6 +32,7 @@ from connors_core.core.parameter_override import (
 from connors_core.core.registry import registry
 from connors_screener.core.screener import ScreeningResult, StockData
 from connors_screener.screening.config_loader import config_loader
+from connors_screener.screening.post_filters import get_post_filter
 from connors_core.services.base import BaseService
 
 PostFilter = Callable[[StockData, Dict[str, Any]], bool]
@@ -216,6 +220,54 @@ class ScreenerService(BaseService):
             self.logger.error(f"Failed to load config file {config_file_path}: {e}")
             raise
 
+    def load_external_post_filter(self, file_path: str) -> List[str]:
+        """Load external post-filter(s) from a Python file.
+
+        The file should call register_post_filter() to register one or more
+        named post-filters. The register_post_filter function is injected
+        into the module namespace automatically.
+
+        Args:
+            file_path: Path to a .py file containing post-filter functions.
+
+        Returns:
+            List of newly registered post-filter names.
+        """
+        from connors_screener.screening.post_filters import (
+            list_post_filters,
+            register_post_filter,
+        )
+
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Post-filter file not found: {path}")
+        if path.suffix != ".py":
+            raise ValueError("Post-filter file must be a Python (.py) file")
+
+        before = set(list_post_filters())
+
+        module_name = f"external_post_filter_{path.stem}_{hash(str(path))}"
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load module from {path}")
+
+        module = importlib.util.module_from_spec(spec)
+        module.__dict__["register_post_filter"] = register_post_filter
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        after = set(list_post_filters())
+        new_filters = sorted(after - before)
+
+        if not new_filters:
+            raise ValueError(
+                f"No post-filters were registered by {path}. "
+                "The file must call register_post_filter(name, fn)."
+            )
+
+        self.logger.info(f"Loaded external post-filters: {', '.join(new_filters)}")
+        return new_filters
+
     def contains_substring(self, text: str, substring: str) -> bool:
         """Helper method to check if text contains substring (case-insensitive)"""
         return substring.lower() in text.lower()
@@ -229,7 +281,7 @@ class ScreenerService(BaseService):
         parameter_string: Optional[str] = None,
         sort_by: str = "close",
         sort_order: str = "asc",
-        post_filter: Optional[PostFilter] = None,
+        post_filter: Union[PostFilter, str, None] = None,
         post_filter_context: Optional[Dict[str, Any]] = None,
     ) -> ScreeningResult:
         """
@@ -243,8 +295,9 @@ class ScreenerService(BaseService):
             parameter_string: Parameter overrides as string ("key1:value1;key2:value2")
             sort_by: Field to sort by (close, volume, market_cap_basic, etc.)
             sort_order: Sort order ('asc' or 'desc')
-            post_filter: Optional callable (stock, context) -> bool to filter results
-                client-side after the provider returns them. Return True to keep.
+            post_filter: Optional filter for results. Can be a callable
+                (stock, context) -> bool, a string name of a registered post-filter
+                (e.g. "elephant_bars"), or None.
             post_filter_context: Optional dict merged into the filter context
                 (overrides keys from ScreeningConfig.parameters).
 
@@ -288,7 +341,14 @@ class ScreenerService(BaseService):
                     ScreeningResult, provider_instance.scan(screening_config, market)
                 )
 
-            if post_filter is not None:
+            # Resolve string-based post_filter to callable
+            resolved_post_filter: Optional[PostFilter] = None
+            if isinstance(post_filter, str):
+                resolved_post_filter = get_post_filter(post_filter)
+            elif post_filter is not None:
+                resolved_post_filter = post_filter
+
+            if resolved_post_filter is not None:
                 pre_filter_count = len(result.data)
                 filter_context: Dict[str, Any] = dict(screening_config.parameters)
                 if post_filter_context:
@@ -296,7 +356,7 @@ class ScreenerService(BaseService):
 
                 filtered_data = [
                     stock for stock in result.data
-                    if post_filter(stock, filter_context)
+                    if resolved_post_filter(stock, filter_context)
                 ]
                 filtered_symbols = [stock.symbol for stock in filtered_data]
 

@@ -6,6 +6,7 @@ import pytest
 
 from connors_screener.core.screener import ScreeningConfig
 from connors_screener.screening.configs.finviz_rsi2 import FinvizRSI2Configs
+from connors_screener.screening.configs.tradingview_elephant_bars import TradingViewElephantBarsConfigs
 from connors_screener.screening.configs.tradingview_rsi2 import TradingViewRSI2Configs
 
 
@@ -147,3 +148,38 @@ class TestFinvizRSI2Configs:
         tv_fields = {f["field"] for f in tv_config.filters}
         finviz_fields = {f["field"] for f in finviz_config.filters}
         assert tv_fields != finviz_fields
+
+
+class TestTradingViewElephantBarsConfigs:
+    """Test TradingView elephant_bars configurations"""
+
+    def test_get_elephant_bars_config(self) -> None:
+        """Test getting elephant_bars configuration"""
+        config = TradingViewElephantBarsConfigs.get_config("elephant_bars")
+
+        assert isinstance(config, ScreeningConfig)
+        assert config.name == "elephant_bars"
+        assert config.provider == "tv"
+        assert config.filters == []
+        assert config.provider_config["use_symbolset"] is False
+        assert config.provider_config["skip_default_volume_filter"] is True
+        assert "average_volume_30d_calc" in config.provider_config["extra_columns"]
+        assert "ATR" in config.provider_config["extra_columns"]
+
+    def test_elephant_bars_registered_in_registry(self) -> None:
+        """Test that elephant_bars config is registered in the global registry"""
+        from connors_core.core.registry import registry
+
+        config = registry.get_screening_config("tv", "elephant_bars")
+        assert config.name == "elephant_bars"
+
+    def test_list_configs(self) -> None:
+        """Test listing elephant_bars configurations"""
+        configs = TradingViewElephantBarsConfigs.list_configs()
+        assert "elephant_bars" in configs
+
+    def test_elephant_bars_no_filters(self) -> None:
+        """Test that elephant_bars has no simple filters and no parameters"""
+        config = TradingViewElephantBarsConfigs.get_config("elephant_bars")
+        assert config.filters == []
+        assert config.parameters == {}

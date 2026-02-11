@@ -152,6 +152,111 @@ class TestTradingViewProvider:
         assert len(volume_filters) >= 1
 
 
+    def test_build_payload_extra_columns(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test that extra_columns from provider_config are appended"""
+        config = ScreeningConfig(
+            name="test_extra",
+            provider="tv",
+            parameters={},
+            provider_config={"extra_columns": ["average_volume_30d_calc", "ATR"]},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        assert "average_volume_30d_calc" in payload["columns"]
+        assert "ATR" in payload["columns"]
+        assert "name" in payload["columns"]
+        assert "close" in payload["columns"]
+
+    def test_build_payload_extra_columns_no_duplicates(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test that extra_columns does not duplicate existing base columns"""
+        config = ScreeningConfig(
+            name="test_extra_dup",
+            provider="tv",
+            parameters={},
+            provider_config={"extra_columns": ["volume", "close", "ATR"]},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        assert payload["columns"].count("volume") == 1
+        assert payload["columns"].count("close") == 1
+        assert "ATR" in payload["columns"]
+
+    def test_build_payload_no_symbolset(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test use_symbolset=False sends empty symbols dict"""
+        config = ScreeningConfig(
+            name="test_no_symbolset",
+            provider="tv",
+            parameters={},
+            provider_config={"use_symbolset": False},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        assert payload["symbols"] == {}
+
+    def test_build_payload_with_symbolset_default(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test that symbolset is included by default"""
+        config = ScreeningConfig(
+            name="test_default_symbolset",
+            provider="tv",
+            parameters={},
+            provider_config={},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        assert "symbolset" in payload["symbols"]
+        assert payload["symbols"]["symbolset"] == [market_config.symbolset]
+
+    def test_build_payload_skip_default_volume_filter(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test skip_default_volume_filter=True prevents auto volume filter"""
+        config = ScreeningConfig(
+            name="test_no_vol",
+            provider="tv",
+            parameters={},
+            provider_config={"skip_default_volume_filter": True},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        volume_filters = [f for f in payload["filter"] if f["left"] == "volume"]
+        assert len(volume_filters) == 0
+
+    def test_build_payload_default_volume_filter_added(
+        self, provider: TradingViewProvider
+    ) -> None:
+        """Test that volume filter is auto-added by default"""
+        config = ScreeningConfig(
+            name="test_auto_vol",
+            provider="tv",
+            parameters={},
+            provider_config={},
+            filters=[],
+        )
+        market_config = provider.screening_config_manager.get_market_config("america")
+        payload = provider._build_payload(config, market_config)
+
+        volume_filters = [f for f in payload["filter"] if f["left"] == "volume"]
+        assert len(volume_filters) == 1
+
+
 class TestFinvizProvider:
     """Test Finviz provider functionality"""
 

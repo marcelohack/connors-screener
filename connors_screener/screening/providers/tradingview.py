@@ -206,6 +206,12 @@ class TradingViewProvider:
             "exchange",
         ]
 
+        # Append extra columns requested by the config
+        extra_columns = config.provider_config.get("extra_columns", [])
+        for col in extra_columns:
+            if col not in columns:
+                columns.append(col)
+
         # Build filters from config
         filters = []
         volume_threshold = config.provider_config.get(
@@ -226,11 +232,20 @@ class TradingViewProvider:
                 }
             )
 
-        # Add volume filter if not already present
-        if not any(f["field"] == "volume" for f in config.filters):
+        # Add volume filter if not already present (unless config opts out)
+        skip_default_volume = config.provider_config.get(
+            "skip_default_volume_filter", False
+        )
+        if not skip_default_volume and not any(
+            f["field"] == "volume" for f in config.filters
+        ):
             filters.append(
                 {"left": "volume", "operation": "greater", "right": volume_threshold}
             )
+
+        # Build symbols section
+        use_symbolset = config.provider_config.get("use_symbolset", True)
+        symbols_section = {"symbolset": [market_config.symbolset]} if use_symbolset else {}
 
         return {
             "columns": columns,
@@ -239,7 +254,7 @@ class TradingViewProvider:
             "options": {"lang": "en"},
             "range": [0, 100],
             "sort": {"sortBy": sort_by, "sortOrder": sort_order},
-            "symbols": {"symbolset": [market_config.symbolset]},
+            "symbols": symbols_section,
             "markets": [market_config.market_identifier],
             "filter2": self._get_stock_type_filter(),
         }
