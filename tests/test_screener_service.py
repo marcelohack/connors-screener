@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
+from connors_screener.screening.post_filters import _post_filters
+
 import pytest
 
 from connors_screener.config.screening import MarketScreeningConfig
@@ -725,7 +727,6 @@ class TestPostFilter:
             received_contexts.append(dict(ctx))
             return True
 
-        from connors_screener.screening.post_filters import _post_filters
         _post_filters["test_capture"] = capture_filter
 
         try:
@@ -744,3 +745,139 @@ class TestPostFilter:
                 assert ctx["rsi_level"] == 30  # from screening_config.parameters
         finally:
             _post_filters.pop("test_capture", None)
+
+
+class TestLoadExternalPostFilter:
+    """Tests for load_external_post_filter()"""
+
+    @pytest.fixture
+    def service(self):
+        return ScreenerService()
+
+    def test_load_valid_external_post_filter(self, service, tmp_path):
+        """Test loading a valid external post-filter file"""
+        filter_file = tmp_path / "my_filter.py"
+        filter_file.write_text(
+            "def my_filter(stock, ctx):\n"
+            "    return stock.price > 100\n"
+            "\n"
+            "register_post_filter('ext_test_filter', my_filter)\n"
+        )
+
+        try:
+            names = service.load_external_post_filter(str(filter_file))
+            assert names == ["ext_test_filter"]
+            assert "ext_test_filter" in _post_filters
+        finally:
+            _post_filters.pop("ext_test_filter", None)
+
+    def test_load_external_post_filter_multiple(self, service, tmp_path):
+        """Test loading a file that registers multiple filters"""
+        filter_file = tmp_path / "multi_filter.py"
+        filter_file.write_text(
+            "def filter_a(stock, ctx):\n"
+            "    return True\n"
+            "\n"
+            "def filter_b(stock, ctx):\n"
+            "    return False\n"
+            "\n"
+            "register_post_filter('ext_multi_a', filter_a)\n"
+            "register_post_filter('ext_multi_b', filter_b)\n"
+        )
+
+        try:
+            names = service.load_external_post_filter(str(filter_file))
+            assert sorted(names) == ["ext_multi_a", "ext_multi_b"]
+        finally:
+            _post_filters.pop("ext_multi_a", None)
+            _post_filters.pop("ext_multi_b", None)
+
+    def test_load_external_post_filter_file_not_found(self, service):
+        """Test that missing file raises FileNotFoundError"""
+        with pytest.raises(FileNotFoundError, match="not found"):
+            service.load_external_post_filter("/nonexistent/filter.py")
+
+    def test_load_external_post_filter_not_python(self, service, tmp_path):
+        """Test that non-.py file raises ValueError"""
+        filter_file = tmp_path / "filter.txt"
+        filter_file.write_text("not python")
+
+        with pytest.raises(ValueError, match="Python"):
+            service.load_external_post_filter(str(filter_file))
+
+    def test_load_external_post_filter_no_registration(self, service, tmp_path):
+        """Test that file with no register_post_filter calls raises ValueError"""
+        filter_file = tmp_path / "empty_filter.py"
+        filter_file.write_text(
+            "def my_filter(stock, ctx):\n"
+            "    return True\n"
+        )
+
+        with pytest.raises(ValueError, match="No post-filters were registered"):
+            service.load_external_post_filter(str(filter_file))
+
+    def test_loaded_filter_works_with_run_screening(self, service, tmp_path):
+        """Test that externally loaded filter can be used by name in run_screening"""
+        filter_file = tmp_path / "price_filter.py"
+        filter_file.write_text(
+            "def price_filter(stock, ctx):\n"
+            "    threshold = ctx.get('min_price', 0)\n"
+            "    return stock.price > threshold\n"
+            "\n"
+            "register_post_filter('ext_price', price_filter)\n"
+        )
+
+        try:
+            service.load_external_post_filter(str(filter_file))
+
+            stock_data = [
+                StockData(symbol="AAPL", price=150.0),
+                StockData(symbol="PENNY", price=2.0),
+            ]
+            mock_result = ScreeningResult(
+                symbols=["AAPL", "PENNY"],
+                data=stock_data,
+                provider="tv",
+                config_name="test",
+                timestamp="2024-01-01T00:00:00Z",
+                metadata={"market": "america"},
+            )
+
+            mock_config = ScreeningConfig(
+                name="test",
+                description="Test",
+                provider="tv",
+                parameters={},
+                filters=[],
+                provider_config={},
+            )
+            mock_provider = Mock()
+            mock_provider.scan.return_value = mock_result
+
+            with (
+                patch.object(
+                    service.registry,
+                    "create_screener_provider",
+                    return_value=mock_provider,
+                ),
+                patch.object(
+                    service.registry,
+                    "get_screening_config",
+                    return_value=mock_config,
+                ),
+                patch(
+                    "connors_screener.services.screener_service.apply_parameter_overrides",
+                    return_value=mock_config,
+                ),
+            ):
+                result = service.run_screening(
+                    "tv",
+                    "test",
+                    post_filter="ext_price",
+                    post_filter_context={"min_price": 100},
+                )
+
+            assert result.symbols == ["AAPL"]
+            assert len(result.data) == 1
+        finally:
+            _post_filters.pop("ext_price", None)

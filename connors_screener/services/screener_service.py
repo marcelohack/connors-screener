@@ -5,7 +5,9 @@ Provides high-level interface for stock screening operations,
 integrating with the screening providers and configurations.
 """
 
+import importlib.util
 import json
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union, cast
@@ -217,6 +219,54 @@ class ScreenerService(BaseService):
         except Exception as e:
             self.logger.error(f"Failed to load config file {config_file_path}: {e}")
             raise
+
+    def load_external_post_filter(self, file_path: str) -> List[str]:
+        """Load external post-filter(s) from a Python file.
+
+        The file should call register_post_filter() to register one or more
+        named post-filters. The register_post_filter function is injected
+        into the module namespace automatically.
+
+        Args:
+            file_path: Path to a .py file containing post-filter functions.
+
+        Returns:
+            List of newly registered post-filter names.
+        """
+        from connors_screener.screening.post_filters import (
+            list_post_filters,
+            register_post_filter,
+        )
+
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Post-filter file not found: {path}")
+        if path.suffix != ".py":
+            raise ValueError("Post-filter file must be a Python (.py) file")
+
+        before = set(list_post_filters())
+
+        module_name = f"external_post_filter_{path.stem}_{hash(str(path))}"
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load module from {path}")
+
+        module = importlib.util.module_from_spec(spec)
+        module.__dict__["register_post_filter"] = register_post_filter
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        after = set(list_post_filters())
+        new_filters = sorted(after - before)
+
+        if not new_filters:
+            raise ValueError(
+                f"No post-filters were registered by {path}. "
+                "The file must call register_post_filter(name, fn)."
+            )
+
+        self.logger.info(f"Loaded external post-filters: {', '.join(new_filters)}")
+        return new_filters
 
     def contains_substring(self, text: str, substring: str) -> bool:
         """Helper method to check if text contains substring (case-insensitive)"""
