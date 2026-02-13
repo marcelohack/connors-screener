@@ -1,0 +1,20 @@
+name: custom_rsi_oversold
+provider: tv
+description: "Custom RSI oversold screening with specific parameters"
+parameters:
+  rsi_level: 30
+  rsi_period: 14
+  volume_min: 1000000
+provider_config:
+  market_cap_min: 50000000
+  volume_threshold: 1000000
+filters:
+  - field: RSI
+    operation: less
+    value: 30
+  - field: volume
+    operation: greater
+    value: 1000000
+  - field: is_blacklisted
+    operation: equal
+    value: false

@@ -1,0 +1,19 @@
+name: elephant_bars_custom
+provider: tv
+description: "Elephant bars with volume/price pre-filters ($10-$100, vol > 100k)"
+parameters: {}
+provider_config:
+  extra_columns: [average_volume_30d_calc, ATR]
+  use_symbolset: false
+  skip_default_volume_filter: true
+filters:
+  - field: volume
+    operation: greater
+    value: 100000
+  - field: close
+    operation: in_range
+    value: [10, 100]
+post_filter: elephant_bars
+post_filter_context:
+  volume_multiplier: 3.0
+  atr_multiplier: 2.0
