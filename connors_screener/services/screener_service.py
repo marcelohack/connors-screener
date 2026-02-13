@@ -10,7 +10,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 import connors_screener.screening.configs.finviz_rsi2
 import connors_screener.screening.configs.tradingview_crypto_basic
@@ -216,6 +216,28 @@ class ScreenerService(BaseService):
                 f"Loaded external configurations: {', '.join(registered_configs)}"
             )
             return registered_configs
+        except Exception as e:
+            self.logger.error(f"Failed to load config file {config_file_path}: {e}")
+            raise
+
+    def load_external_config_file_with_metadata(
+        self, config_file_path: Path
+    ) -> Tuple[List[str], Dict[str, Dict[str, Any]]]:
+        """Load external config file, register configs, and return metadata.
+
+        Returns:
+            A tuple of (registered_names, metadata_by_name) where
+            metadata_by_name maps config names to dicts containing
+            post_filter / post_filter_context values found in the YAML.
+        """
+        try:
+            registered_configs, metadata = (
+                config_loader.register_configs_from_file_with_metadata(config_file_path)
+            )
+            self.logger.info(
+                f"Loaded external configurations: {', '.join(registered_configs)}"
+            )
+            return registered_configs, metadata
         except Exception as e:
             self.logger.error(f"Failed to load config file {config_file_path}: {e}")
             raise

@@ -1,0 +1,15 @@
+name: momentum_breakout
+provider: tv
+description: "Momentum breakout screening configuration"
+parameters:
+  price_change_pct: 5.0
+  volume_multiplier: 2.0
+provider_config:
+  volume_threshold: 500000
+filters:
+  - field: change
+    operation: greater
+    value: 5.0
+  - field: volume
+    operation: greater
+    value: 500000
