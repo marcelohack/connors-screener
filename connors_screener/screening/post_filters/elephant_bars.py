@@ -23,6 +23,8 @@ from connors_screener.screening.post_filters import register_post_filter
 
 logger = logging.getLogger(__name__)
 
+_context_printed = False
+
 
 def elephant_bars_filter(stock: StockData, context: Dict[str, Any]) -> bool:
     """Determine whether a stock's current bar qualifies as an elephant bar.
@@ -35,20 +37,34 @@ def elephant_bars_filter(stock: StockData, context: Dict[str, Any]) -> bool:
         True to keep the stock (it IS an elephant bar), False to discard.
     """
 
-    # Implement elephant bar detection logic.
-    #
-    # OHLCV
+    global _context_printed
+    if not _context_printed:
+        atr_f = context.get("atr_factor", 2.5)
+        vol_f = context.get("volume_factor", 2.0)
+        body_min = context.get("candle_body_pct", 80.0)
+        print(f"  [elephant_bars] Context: atr_factor={atr_f}, volume_factor={vol_f}, candle_body_pct={body_min}")
+        print(f"  [elephant_bars] Full context: {context}")
+        print()
+        _context_printed = True
+
+    # OHLCV — reject early if required fields are missing
     open_price = stock.get_field("open")
     high = stock.get_field("high")
-    close_price = stock.price
     low = stock.get_field("low")
+    close_price = stock.price
     volume = stock.volume
+    atr = stock.get_field("ATR")
+    avg_volume = stock.get_field("average_volume_30d_calc")
 
-    atr_factor = context.get("atr_factor", 2.5) # Multiplier for elephant bar amplitude threshold
-    atr = stock.get_field("ATR") # Average True Range value from raw_data
+    required = {"open": open_price, "high": high, "low": low, "close": close_price,
+                "volume": volume, "ATR": atr, "average_volume_30d_calc": avg_volume}
+    missing = [k for k, v in required.items() if v is None]
+    if missing:
+        print(f"  [elephant_bars] {stock.symbol} SKIP — missing fields: {missing}")
+        return False
 
-    avg_volume = stock.get_field("average_volume_30d_calc") # 30-day average volume from raw_data
-    volume_factor = context.get("volume_factor", 2.0) # Volume comparison multiplier
+    atr_factor = context.get("atr_factor", 2.5)
+    volume_factor = context.get("volume_factor", 2.0)
 
     candle_body_pct = context.get("candle_body_pct", 80.0) # Minimum body percentage of total range
     # use_financial_volume = context.get("use_financial_volume", False) # If True, use Close*Volume instead of Volume
@@ -60,21 +76,12 @@ def elephant_bars_filter(stock: StockData, context: Dict[str, Any]) -> bool:
     body_pct = (body / amplitude) * 100 if amplitude > 0 else 0.0
     direction = "bullish" if close_price > open_price else "bearish" if close_price < open_price else "doji"
 
-    logger.debug(
-        "[elephant_bars] %s | O=%.2f H=%.2f L=%.2f C=%.2f | vol=%,.0f avg_vol=%,.0f | "
-        "ATR=%.2f atr_factor=%.1f atr_adj=%.2f | vol_factor=%.1f vol_adj=%,.0f | "
-        "amplitude=%.2f body=%.2f body_pct=%.1f%% (min=%.1f%%) | direction=%s | "
-        "amp>atr_adj=%s vol_adj>avg_vol=%s body_pct>min=%s",
-        stock.symbol,
-        open_price, high, low, close_price,
-        volume, avg_volume,
-        atr, atr_factor, atr_adjusted,
-        volume_factor, volume_adjusted,
-        amplitude, body, body_pct, candle_body_pct,
-        direction,
-        amplitude > atr_adjusted,
-        volume_adjusted > avg_volume,
-        body_pct > candle_body_pct,
+    print(
+        f"  [elephant_bars] {stock.symbol} | O={open_price:.4f} H={high:.4f} L={low:.4f} C={close_price:.4f} | "
+        f"vol={volume:,.0f} avg_vol={avg_volume:,.0f} | "
+        f"ATR={atr:.4f} atr_adj={atr_adjusted:.4f} | "
+        f"amp={amplitude:.4f} body={body:.4f} body_pct={body_pct:.1f}% (min={candle_body_pct:.1f}%) | "
+        f"{direction} | amp>atr={amplitude > atr_adjusted} vol_adj>avg={volume_adjusted > avg_volume} body>min={body_pct > candle_body_pct}"
     )
 
     signal = ""
@@ -88,7 +95,7 @@ def elephant_bars_filter(stock: StockData, context: Dict[str, Any]) -> bool:
             if body_pct > candle_body_pct:
                 signal = "sell"
 
-    logger.debug("[elephant_bars] %s -> %s", stock.symbol, signal or "REJECTED")
+    print(f"  [elephant_bars] {stock.symbol} -> {signal or 'REJECTED'}")
     return bool(signal)
 
 
