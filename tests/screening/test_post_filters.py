@@ -67,8 +67,37 @@ class TestPostFilterRegistry:
         assert isinstance(filters, list)
         assert "elephant_bars" in filters
 
-    def test_elephant_bars_skeleton_passes_all(self) -> None:
-        """Test that the skeleton elephant_bars filter passes everything through"""
+    def test_elephant_bars_detects_bullish_bar(self) -> None:
+        """Test that the elephant_bars filter detects a bullish elephant bar"""
         fn = get_post_filter("elephant_bars")
-        stock = StockData(symbol="AAPL", price=150.0, volume=1_000_000)
-        assert fn(stock, {}) is True
+        stock = StockData(
+            symbol="AAPL",
+            price=160.0,  # close
+            volume=5_000_000,
+            raw_data={
+                "open": 140.0,
+                "high": 162.0,
+                "low": 138.0,
+                "ATR": 5.0,
+                "average_volume_30d_calc": 1_000_000,
+            },
+        )
+        ctx = {"atr_factor": 2.0, "volume_factor": 2.0, "candle_body_pct": 70.0}
+        assert fn(stock, ctx) is True
+
+    def test_elephant_bars_rejects_small_bar(self) -> None:
+        """Test that the elephant_bars filter rejects a normal-sized bar"""
+        fn = get_post_filter("elephant_bars")
+        stock = StockData(
+            symbol="AAPL",
+            price=151.0,  # close
+            volume=500_000,
+            raw_data={
+                "open": 150.0,
+                "high": 151.5,
+                "low": 149.5,
+                "ATR": 5.0,
+                "average_volume_30d_calc": 1_000_000,
+            },
+        )
+        assert fn(stock, {}) is False

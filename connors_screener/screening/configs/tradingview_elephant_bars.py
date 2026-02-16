@@ -19,7 +19,7 @@ class TradingViewElephantBarsConfigs:
             provider="tv",
             parameters={},
             provider_config={
-                "extra_columns": ["average_volume_30d_calc", "ATR"],
+                "extra_columns": ["average_volume_30d_calc", "ATR", "high", "low", "open"],
                 "use_symbolset": False,
                 "skip_default_volume_filter": True,
             },

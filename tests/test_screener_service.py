@@ -675,16 +675,34 @@ class TestPostFilter:
         assert result.data[1].get_field("RSI2") == 25
 
     def test_run_screening_with_string_post_filter(
-        self, service, screening_config, screening_result
+        self, service, screening_config
     ):
         """Test passing post_filter as a string name resolves from registry"""
-        p1, p2, p3 = self._patch_service(service, screening_config, screening_result)
+        elephant_raw = {
+            "open": 100.0, "high": 120.0, "low": 99.0,
+            "ATR": 3.0, "average_volume_30d_calc": 500_000,
+        }
+        elephant_result = ScreeningResult(
+            symbols=["AAPL", "GOOGL", "MSFT"],
+            data=[
+                StockData(symbol="AAPL", name="Apple", price=118.0,
+                          volume=5_000_000, raw_data={**elephant_raw}),
+                StockData(symbol="GOOGL", name="Alphabet", price=119.0,
+                          volume=4_000_000, raw_data={**elephant_raw}),
+                StockData(symbol="MSFT", name="Microsoft", price=118.0,
+                          volume=6_000_000, raw_data={**elephant_raw}),
+            ],
+            provider="tv",
+            config_name="test_config",
+            timestamp="2024-01-01T00:00:00Z",
+            metadata={"market": "america"},
+        )
+        p1, p2, p3 = self._patch_service(service, screening_config, elephant_result)
         with p1, p2, p3:
             result = service.run_screening(
                 "tv", "test_config", post_filter="elephant_bars"
             )
 
-        # elephant_bars skeleton passes everything through
         assert result.symbols == ["AAPL", "GOOGL", "MSFT"]
         assert len(result.data) == 3
         assert result.metadata["post_filter_applied"] is True
