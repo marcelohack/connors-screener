@@ -23,21 +23,14 @@ pip install connors-screener
 
 ### Local Development
 
-**Prerequisites**: Python 3.13, [pyenv](https://github.com/pyenv/pyenv) + [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv)
+**Prerequisites**: [uv](https://github.com/astral-sh/uv) (will install Python 3.13 if needed).
+Sibling repo must be cloned alongside this one: `../core` (wired as an editable path source via `[tool.uv.sources]`).
 
 ```bash
-# 1. Create and activate a virtual environment
-pyenv virtualenv 3.13 connors-screener
-pyenv activate connors-screener
-
-# 2. Install connors packages from local checkouts (not on PyPI)
-pip install -e ../core
-
-# 3. Install with dev dependencies
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-A `.python-version` file is included so pyenv auto-activates when you `cd` into this directory.
+uv reads `.python-version` to pick the interpreter and creates `.venv/` automatically. Run commands with `uv run <cmd>` (no activation needed), or `source .venv/bin/activate`.
 
 ## Quick Start
 
