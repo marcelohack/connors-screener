@@ -4,7 +4,7 @@
 
 ## Overview
 
-Stock and cryptocurrency screening system with support for multiple providers (TradingView, Finviz), built-in configurations, runtime parameter overrides, and external configuration files. Provides both a programmatic API and integration with the playground CLI.
+Stock and cryptocurrency screening system with support for multiple providers (TradingView, Finviz), built-in configurations, runtime parameter overrides, and external configuration files. Provides a programmatic API and the `connors-scan` CLI; the [connors-playground](https://github.com/marcelohack/connors-playground) Streamlit UI builds on the same service.
 
 ## Features
 
@@ -61,40 +61,40 @@ print(service.get_available_markets())   # ['america', 'australia', 'brazil']
 
 ## CLI Usage
 
-The screening CLI is part of [connors-playground](https://github.com/marcelohack/connors-playground):
+Installing the package provides the `connors-scan` command (also runnable as `python -m connors_screener.cli`):
 
 ```bash
 # Basic stock screening
-python -m connors.cli.screener --provider tv --config rsi2 --market australia
+connors-scan --provider tv --config rsi2 --market australia
 
 # High-volume RSI2 screening
-python -m connors.cli.screener --provider tv --config rsi2_high_volume --market america
+connors-scan --provider tv --config rsi2_high_volume --market america
 
 # Momentum breakout screening
-python -m connors.cli.screener --provider tv --config momentum_breakout --market america
+connors-scan --provider tv --config momentum_breakout --market america
 
 # Cryptocurrency screening
-python -m connors.cli.screener --provider tv_crypto --config crypto_basic
-python -m connors.cli.screener --provider tv_crypto --config crypto_high_volume
+connors-scan --provider tv_crypto --config crypto_basic
+connors-scan --provider tv_crypto --config crypto_high_volume
 
 # Parameter overrides
-python -m connors.cli.screener --provider tv --config rsi2 --parameters "rsi_level:10;rsi_period:3"
+connors-scan --provider tv --config rsi2 --parameters "rsi_level:10;rsi_period:3"
 
 # Show available parameters for a config
-python -m connors.cli.screener --provider tv --config rsi2 --show-parameters
+connors-scan --provider tv --config rsi2 --show-parameters
 
 # Custom field display
-python -m connors.cli.screener --provider tv --config rsi2 --market australia \
+connors-scan --provider tv --config rsi2 --market australia \
     --display-fields "symbol,price,price_earnings_ttm,recommendation_mark,currency"
 
 # External configuration file
-python -m connors.cli.screener --config-file my_config.yaml --provider tv --config custom_momentum
+connors-scan --config-file my_config.yaml --provider tv --config custom_momentum
 
 # List available options
-python -m connors.cli.screener --list-providers
-python -m connors.cli.screener --list-configs
-python -m connors.cli.screener --list-markets
-python -m connors.cli.screener --list-fields
+connors-scan --list-providers
+connors-scan --list-configs
+connors-scan --list-markets
+connors-scan --list-fields
 ```
 
 ## Built-in Configurations
@@ -151,10 +151,10 @@ configurations:
 
 ```bash
 # Generate example config file
-python -m connors.cli.screener --create-example-config my_config.yaml
+connors-scan --create-example-config my_config.yaml
 
 # Use external config
-python -m connors.cli.screener --config-file my_config.yaml --provider tv --config custom_momentum
+connors-scan --config-file my_config.yaml --provider tv --config custom_momentum
 ```
 
 ## Available Providers
