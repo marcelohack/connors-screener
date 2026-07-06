@@ -4,7 +4,7 @@
 
 ## Overview
 
-Stock and cryptocurrency screening system with support for multiple providers (TradingView, Finviz), built-in configurations, runtime parameter overrides, and external configuration files. Provides a programmatic API and the `connors-scan` CLI; the [connors-playground](https://github.com/marcelohack/connors-playground) Streamlit UI builds on the same service.
+Stock and cryptocurrency screening system with support for multiple providers (TradingView, Finviz), built-in configurations, runtime parameter overrides, and external configuration files. Provides a programmatic API and the `connors-scan` CLI.
 
 ## Features
 
@@ -187,7 +187,7 @@ pytest --cov=connors_screener
 
 | Package | Description | Links |
 |---------|-------------|-------|
-| [connors-playground](https://github.com/marcelohack/connors-playground) | CLI + Streamlit UI (integration hub) | [README](https://github.com/marcelohack/connors-playground#readme) |
+| [connors-playground](https://github.com/marcelohack/connors-playground) | Workspace hub + API token manager | [README](https://github.com/marcelohack/connors-playground#readme) |
 | [connors-core](https://github.com/marcelohack/connors-core) | Registry, config, indicators, metrics | [README](https://github.com/marcelohack/connors-core#readme) |
 | [connors-backtest](https://github.com/marcelohack/connors-backtest) | Backtesting service + built-in strategies | [README](https://github.com/marcelohack/connors-backtest#readme) |
 | [connors-strategies](https://github.com/marcelohack/connors-strategies) | Trading strategy collection (private) | — |
