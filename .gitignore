@@ -11,3 +11,4 @@ htmlcov/
 .tox/
 .venv/
 venv/
+graphify-out/
