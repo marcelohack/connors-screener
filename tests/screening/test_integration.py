@@ -93,20 +93,23 @@ class TestScreeningSystemIntegration:
         assert len(all_configs["finviz"]) >= 2
 
     def test_config_naming_convention(self) -> None:
-        """Test that RSI2 config names follow rsi2 prefix convention (not lcrsi2)"""
+        """RSI-2 config names use the `rsi2` prefix.
+
+        This previously guarded the opposite convention — names had to start
+        with `lcrsi2` and *not* `rsi2`. The 2026-07-29 rename moved the whole
+        workspace off the `LCRSI2`/`lcrsi2` prefix onto `RSI-2`/`rsi2`, which
+        inverted this invariant; the old negative assertion became a
+        contradiction of the positive one. Only the positive half survives.
+        """
         tv_configs = registry.list_screening_configs("tv")["tv"]
         finviz_configs = registry.list_screening_configs("finviz")["finviz"]
 
-        # RSI2 config names should start with 'rsi2', not 'lcrsi2'
-        rsi2_configs = [name for name in tv_configs if "rsi2" in name]
-        for config_name in rsi2_configs:
-            assert config_name.startswith("rsi2")
-            assert not config_name.startswith("lcrsi2")
-
-        finviz_rsi2_configs = [name for name in finviz_configs if "rsi2" in name]
-        for config_name in finviz_rsi2_configs:
-            assert config_name.startswith("rsi2")
-            assert not config_name.startswith("lcrsi2")
+        for configs in (tv_configs, finviz_configs):
+            rsi2_configs = [name for name in configs if "rsi2" in name]
+            for config_name in rsi2_configs:
+                assert config_name.startswith("rsi2")
+                # The retired prefix must not come back
+                assert not config_name.startswith("lcrsi2")
 
         # Verify we have other types of configs too
         assert any("momentum" in name for name in tv_configs)
