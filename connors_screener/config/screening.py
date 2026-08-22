@@ -46,7 +46,7 @@ class ScreeningConfigManager:
             "america-sp-spx": "america",
         }
 
-        self.default_config = os.getenv("SCREENING_CONFIG", "america-sp-spx")
+        self.default_config = os.getenv("CONNORS_SCREENING_CONFIG", "america-sp-spx")
 
     def get_market_config(self, config_name: str) -> MarketScreeningConfig:
         """Get market configuration, handling legacy names"""
