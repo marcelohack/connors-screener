@@ -12,3 +12,6 @@ htmlcov/
 .venv/
 venv/
 graphify-out/
+
+# Claude Code agent/skill symlinks (workspace wiring)
+.claude/
